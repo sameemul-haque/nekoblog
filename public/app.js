@@ -1,74 +1,100 @@
-// Initialize Firebase
-const firebaseConfig = {
-    // TODO: Insert Firebase configuration here
-  };
-  firebase.initializeApp(firebaseConfig);
-  
-  // Get a reference to the database service
-  const database = firebase.database();
-  
-  // Check if user is signed in and enable/disable blog form accordingly
-  firebase.auth().onAuthStateChanged((user) => {
+// Get a reference to the Firestore database service
+var db = firebase.firestore();
+
+// Check for authentication state changes when the page loads
+window.onload = function() {
+  firebase.auth().onAuthStateChanged(function(user) {
     const blogForm = document.getElementById("blog-form");
     const signInButton = document.getElementById("sign-in-button");
     
-    if (user) {
-      // User is signed in
-      blogForm.classList.remove("disabled");
-      signInButton.classList.add("d-none");
-    } else {
-      // User is not signed in
-      blogForm.classList.add("disabled");
-      signInButton.classList.remove("d-none");
-    }
-  });
-  
-  // Listen for form submissions
-  document.getElementById("blog-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    
-    // Get input values
-    const username = document.getElementById("username").value;
-    const blogContent = document.getElementById("blog-content").value;
-    
-    // Save the blog post to the database
-    const blogPostRef = database.ref("blog-posts").push();
-    blogPostRef.set({
-      username: username,
-      blogContent: blogContent
+    signInButton.addEventListener('click', () => {
+      // Create a new instance of the Google provider object
+      const provider = new firebase.auth.GoogleAuthProvider();
+
+      // Sign in with Google
+      auth.signInWithPopup(provider)
+        .then((result) => {
+          // Handle successful sign-in
+          const user = result.user;
+          console.log(`Signed in as ${user.displayName}`);
+        })
+        .catch((error) => {
+          // Handle errors
+          console.error(error);
+        });
     });
-    
-    // Clear the form inputs
-    document.getElementById("username").value = "";
-    document.getElementById("blog-content").value = "";
-  });
-  
-  // Listen for new blog posts and update the carousel
-  const blogPostsRef = database.ref("blog-posts");
-  blogPostsRef.on("child_added", (data) => {
-    const blogPost = data.val();
-    
-    // Create the carousel item
-    const carouselItem = document.createElement("div");
-    carouselItem.classList.add("carousel-item");
-    
-    // Create the username element
-    const usernameElement = document.createElement("h5");
-    usernameElement.textContent = blogPost.username;
-    carouselItem.appendChild(usernameElement);
-    
-    // Create the blog content element
-    const blogContentElement = document.createElement("p");
-    blogContentElement.textContent = blogPost.blogContent;
-    carouselItem.appendChild(blogContentElement);
-    
-    // Add the carousel item to the carousel
-    const carouselInner = document.getElementById("blog-carousel").querySelector(".carousel-inner");
-    carouselInner.appendChild(carouselItem);
-    
-    // If this is the first blog post, make it active
-    if (carouselInner.children.length === 1) {
-      carouselItem.classList.add("active");
+
+    if (user) {
+        // User is signed in
+        blogForm.classList.remove("disabled");
+        signInButton.classList.add("d-none");
+    } else {
+        // User is not signed in
+        blogForm.classList.add("disabled");
+        signInButton.classList.remove("d-none");
     }
   });
-  
+};
+
+// Handle form submit event
+document.getElementById('blog-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  // Get form values
+  var username = document.getElementById('username').value;
+  var blog = document.getElementById('blog').value;
+
+  // Add the blog to the Firestore database if user is authenticated
+  firebase.auth().onAuthStateChanged(function(user) {
+    if (user) {
+      db.collection('blogs').add({
+        username: username,
+        blog: blog,
+        userId: user.uid
+      }).then(function(docRef) {
+        console.log('Document written with ID: ', docRef.id);
+      }).catch(function(error) {
+        console.error('Error adding document: ', error);
+      });
+    } else {
+      console.log('User is not signed in');
+    }
+  });
+
+  // Reset the form
+  document.getElementById('blog-form').reset();
+});
+
+// Listen for changes to the blog collection
+db.collection('blogs').where('userId', '==', firebase.auth().currentUser.uid).onSnapshot(function(querySnapshot) {
+  var blogs = [];
+
+  querySnapshot.forEach(function(doc) {
+    // Convert Firestore document to JavaScript object
+    var blog = doc.data();
+
+    // Add the blog to the blogs array
+    blogs.push(blog);
+  });
+
+  // Display the blogs in the carousel
+  displayBlogs(blogs);
+});
+
+// Display the blogs in the carousel
+function displayBlogs(blogs) {
+  var carouselItems = '';
+
+  blogs.forEach(function(blog, index) {
+    var activeClass = index === 0 ? 'active' : '';
+
+    carouselItems += `
+      <div class="carousel-item ${activeClass}">
+        <h5>${blog.username}</h5>
+        <p>${blog.blog}</p>
+      </div>
+    `;
+  });
+
+  document.querySelector('#blog-carousel .carousel-inner').innerHTML = carouselItems;
+}
